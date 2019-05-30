@@ -71,6 +71,8 @@ mod tests {
         assert!(Pattern::new("/**/[xyz]").unwrap().matches("/a/b/c/x"));
         assert!(Pattern::new("/**/[xyz]").unwrap().matches("/y"));
         assert!(Pattern::new("/**/[xyz]").unwrap().matches("/a/z"));
+        assert!(Pattern::new("*.log").unwrap().matches("sys.log"));
+        assert!(Pattern::new("sys.*").unwrap().matches("sys.log"));
 
         let p = Pattern::new("some/**/needle.txt").unwrap();
         assert!(p.matches("some/needle.txt"));
