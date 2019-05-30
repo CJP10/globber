@@ -1,0 +1,8 @@
+[package]
+name = "globber"
+version = "0.1.0"
+authors = ["Connor Peticca <cjpet10@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+glob = "0.3.0"
