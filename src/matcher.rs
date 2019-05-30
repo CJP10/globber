@@ -1,8 +1,11 @@
 use std::path::is_separator;
 use std::str::Chars;
 
-use crate::syntax::Token;
+use Status::*;
 
+use crate::syntax::{CharSpecifier, Token};
+
+#[derive(Clone, Eq, PartialEq, Debug, Hash)]
 pub(crate) struct Matcher {
     tokens: Vec<Token>,
 }
@@ -35,16 +38,19 @@ impl Matcher {
                         _ => return result,
                     }
 
-                    while let Some(c) = input.next() {
-                        let is_separator = is_separator(c);
+                    if let Some(t) = self.tokens.get(i + ti + 1) {
+                        match t {
+                            Token::Char(c) if is_separator(*c) => {
+                                match self.match_index(i + ti + 2, input.clone()) {
+                                    Status::Retryable => {}
+                                    m => return m,
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
 
-                        match *token {
-                            Token::AnyRecursive => {},
-                            Token::AnySequence if is_separator => { return Status::Retryable; }
-                            Token::AnySequence => {}
-                            _ => {unreachable!()}
-                        };
-
+                    while let Some(_) = input.next() {
                         match self.match_index(i + ti + 1, input.clone()) {
                             Status::Retryable => {}
                             m => return m,
@@ -61,6 +67,27 @@ impl Matcher {
                         return Status::Retryable;
                     }
                 }
+                Token::AnyChar => { return Status::Match; }
+                Token::AnyOf(specifiers) => {
+                    let next = match input.next() {
+                        Some(c) => c,
+                        None => return Status::NoMatch,
+                    };
+
+                    return match_specifiers(specifiers, next);
+                }
+                Token::NotAnyOf(specifiers) => {
+                    let next = match input.next() {
+                        Some(c) => c,
+                        None => return Status::NoMatch,
+                    };
+
+                    return match match_specifiers(specifiers, next) {
+                        Retryable => Match,
+                        Match => Retryable,
+                        _ => { unreachable!() }
+                    };
+                }
                 _ => { unreachable!() }
             }
         }
@@ -70,4 +97,22 @@ impl Matcher {
             None => { Status::Match }
         }
     }
+}
+
+fn match_specifiers(specifiers: &Vec<CharSpecifier>, c: char) -> Status {
+    for specifier in specifiers {
+        match specifier {
+            CharSpecifier::Char(c1) => {
+                if c == *c1 {
+                    return Match;
+                }
+            }
+            CharSpecifier::Range(start, end) => {
+                if c >= *start && c <= *end {
+                    return Match;
+                }
+            }
+        }
+    }
+    Retryable
 }
