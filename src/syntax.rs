@@ -12,16 +12,16 @@ pub(crate) enum Token {
     NotAnyOf(Vec<CharSpecifier>),
     // v a r l o g
     Char(char),
-    // ?(sequence|sequence|sequence)
-    ZeroOrOne(Vec<Vec<char>>),
-    // *(sequence|sequence|sequence)
-    ZeroOrMore(Vec<Vec<char>>),
-    // +(sequence|sequence|sequence)
-    OneOrMore(Vec<Vec<char>>),
-    // @(sequence|sequence|sequence)
-    ExactlyOne(Vec<Vec<char>>),
-    // !(sequence|sequence|sequence)
-    NoneOf(Vec<Vec<char>>),
+    // ?(pattern|pattern|pattern)
+    ZeroOrOne(Vec<Vec<Token>>),
+    // *(pattern|pattern|pattern)
+    ZeroOrMore(Vec<Vec<Token>>),
+    // +(pattern|pattern|pattern)
+    OneOrMore(Vec<Vec<Token>>),
+    // @(pattern|pattern|pattern)
+    ExactlyOne(Vec<Vec<Token>>),
+    // !(pattern|pattern|pattern)
+    NoneOf(Vec<Vec<Token>>),
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -32,6 +32,8 @@ pub(crate) enum CharSpecifier {
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Error {
+    IllegalPattern(usize),
+    IllegalOr(usize),
     IllegalRange(usize),
     EmptyRange(usize),
     // only ** and * are allowed
@@ -63,6 +65,22 @@ impl Parser {
         let mut tokens = Vec::new();
 
         while self.i < self.chars.len() {
+            if self.i + 1 < self.chars.len() {
+                let token = match (self.chars[self.i], self.chars[self.i + 1]) {
+                    ('?', '(') => Some(Token::ZeroOrOne(self.parse_patterns()?)),
+                    ('*', '(') => Some(Token::ZeroOrMore(self.parse_patterns()?)),
+                    ('+', '(') => Some(Token::OneOrMore(self.parse_patterns()?)),
+                    ('@', '(') => Some(Token::ExactlyOne(self.parse_patterns()?)),
+                    ('!', '(') => Some(Token::NoneOf(self.parse_patterns()?)),
+                    _ => None,
+                };
+
+                if let Some(t) = token {
+                    tokens.push(t);
+                    continue;
+                }
+            }
+
             let token = match self.chars[self.i] {
                 '?' => {
                     self.i += 1;
@@ -108,11 +126,10 @@ impl Parser {
 
             self.i = next + 1;
             Ok(token)
-        }else {
+        } else {
             self.i = next;
             Ok(token)
         }
-
     }
 
     fn parse_escape(&mut self) -> Result<Token, Error> {
@@ -138,7 +155,7 @@ impl Parser {
                 first_char += 1;
                 true
             }
-            ']' => {return Err(Error::EmptyRange(start));}
+            ']' => { return Err(Error::EmptyRange(start)); }
             _ => false,
         };
 
@@ -162,6 +179,66 @@ impl Parser {
             Ok(Token::AnyOf(chars))
         }
     }
+
+    fn parse_patterns(&mut self) -> Result<Vec<Vec<Token>>, Error> {
+        let first_char = self.i + 2;
+        let mut brace_level = 0;
+        let mut brace_sequence = None;
+
+        for (i, c) in self.chars[first_char..].iter().enumerate() {
+            match *c {
+                '(' => brace_level += 1,
+                ')' if brace_level == 0 => {
+                    brace_sequence = Some(&self.chars[first_char..first_char + i]);
+                    break;
+                }
+                ')' => brace_level -= 1,
+                _ => {}
+            }
+        }
+
+        let brace_sequence = match brace_sequence {
+            Some(s) => s,
+            None => { return Err(Error::IllegalPattern(first_char)); }
+        };
+
+        let mut patterns = Vec::new();
+        let mut brace_level = 0;
+        let mut last_pattern = 0;
+        for (i, c) in brace_sequence.iter().enumerate() {
+            match *c {
+                '(' => brace_level += 1,
+                ')' => brace_level -= 1,
+                '|' if brace_level == 0 => {
+                    let chars = &self.chars[first_char + last_pattern..first_char + i];
+                    if chars.len() == 0 {
+                        return Err(Error::IllegalOr(first_char));
+                    }
+                    last_pattern = i + 1;
+                    patterns.push(chars)
+                }
+                _ => {}
+            }
+        }
+
+        let chars = &self.chars[first_char + last_pattern..first_char + brace_sequence.len()];
+        if chars.len() == 0 {
+            return Err(Error::IllegalOr(first_char));
+        }
+        patterns.push(chars);
+
+        let mut tokens = Vec::new();
+        for p in patterns {
+            let mut pattern = String::new();
+            for c in p {
+                pattern.push(*c);
+            }
+            tokens.push(parse(&pattern)?)
+        }
+
+        self.i = first_char + brace_sequence.len() + 1;
+        Ok(tokens)
+    }
 }
 
 fn parse_char_specifiers(s: &[char]) -> Vec<CharSpecifier> {
@@ -178,4 +255,3 @@ fn parse_char_specifiers(s: &[char]) -> Vec<CharSpecifier> {
     }
     cs
 }
-

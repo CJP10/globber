@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::matcher::Matcher;
-use crate::syntax::{Error, parse, Token};
+use crate::syntax::{Error, parse};
 
 pub mod syntax;
 pub(crate) mod matcher;
@@ -47,6 +47,11 @@ mod tests {
 
     fn range(c1: char, c2: char) -> Vec<CharSpecifier> {
         vec![CharSpecifier::Range(c1, c2)]
+    }
+
+    #[test]
+    fn lex() {
+        println!("{:#?}", parse("!(+(ab|def)*+(.jpg|.gif))").unwrap());
     }
 
     #[test]
