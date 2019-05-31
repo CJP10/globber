@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn lex() {
-        println!("{:#?}", parse("!(+(ab|def)*+(.jpg|.gif))").unwrap());
+        println!("{:#?}", parse("!([)]|test)").unwrap());
     }
 
     #[test]
@@ -154,16 +154,21 @@ mod tests {
         assert_eq!(Pattern::new("[!]").unwrap_err(), Error::EmptyRange(0));
         assert_eq!(Pattern::new("[]").unwrap_err(), Error::EmptyRange(0));
         assert_eq!(Pattern::new("[]]]]]").unwrap_err(), Error::EmptyRange(0));
-        assert_eq!(Pattern::new("[dfsfsdfsdf").unwrap_err(), Error::IllegalRange(0));
-        assert_eq!(Pattern::new("[!sdfdsfdf").unwrap_err(), Error::IllegalRange(0));
-        assert_eq!(Pattern::new("abc[def").unwrap_err(), Error::IllegalRange(3));
-        assert_eq!(Pattern::new("abc[!def").unwrap_err(), Error::IllegalRange(3));
+        assert_eq!(Pattern::new("[dfsfsdfsdf").unwrap_err(), Error::UnclosedRange(10));
+        assert_eq!(Pattern::new("[!sdfdsfdf").unwrap_err(), Error::UnclosedRange(9));
+        assert_eq!(Pattern::new("abc[def").unwrap_err(), Error::UnclosedRange(6));
+        assert_eq!(Pattern::new("abc[!def").unwrap_err(), Error::UnclosedRange(7));
         assert_eq!(Pattern::new("abc[").unwrap_err(), Error::IllegalRange(3));
-        assert_eq!(Pattern::new("abc[!").unwrap_err(), Error::IllegalRange(3));
-        assert_eq!(Pattern::new("abc[d").unwrap_err(), Error::IllegalRange(3));
-        assert_eq!(Pattern::new("abc[!d").unwrap_err(), Error::IllegalRange(3));
+        assert_eq!(Pattern::new("abc[!").unwrap_err(), Error::UnclosedRange(4));
+        assert_eq!(Pattern::new("abc[d").unwrap_err(), Error::UnclosedRange(4));
+        assert_eq!(Pattern::new("abc[!d").unwrap_err(), Error::UnclosedRange(5));
         assert_eq!(Pattern::new("abc[]").unwrap_err(), Error::EmptyRange(3));
         assert_eq!(Pattern::new("abc[!]").unwrap_err(), Error::EmptyRange(3));
+        assert_eq!(Pattern::new("abc[!]").unwrap_err(), Error::EmptyRange(3));
+        assert_eq!(Pattern::new("[adc(]").unwrap_err(), Error::IllegalChar(4));
+        assert_eq!(Pattern::new("[adc[]").unwrap_err(), Error::IllegalChar(4));
+        assert_eq!(Pattern::new("[adc]]").unwrap_err(), Error::IllegalChar(5));
+        assert_eq!(Pattern::new("[adc)]").unwrap_err(), Error::IllegalChar(4));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use std::path::is_separator;
 use std::str::Chars;
 
-use Status::*;
+use crate::matcher::Status::*;
 
 use crate::syntax::{CharSpecifier, Token};
 
@@ -38,15 +38,17 @@ impl Matcher {
                         _ => return result,
                     }
 
-                    if let Some(t) = self.tokens.get(i + ti + 1) {
-                        match t {
-                            Token::Char(c) if is_separator(*c) => {
-                                match self.match_index(i + ti + 2, input.clone()) {
-                                    Status::Retryable => {}
-                                    m => return m,
+                    if *token == Token::AnyRecursive {
+                        if let Some(t) = self.tokens.get(i + ti + 1) {
+                            match t {
+                                Token::Char(c) if is_separator(*c) => {
+                                    match self.match_index(i + ti + 2, input.clone()) {
+                                        Status::Retryable => {}
+                                        m => return m,
+                                    }
                                 }
+                                _ => {}
                             }
-                            _ => {}
                         }
                     }
 

@@ -33,8 +33,10 @@ pub(crate) enum CharSpecifier {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Error {
     IllegalPattern(usize),
+    IllegalChar(usize),
     IllegalOr(usize),
     IllegalRange(usize),
+    UnclosedRange(usize),
     EmptyRange(usize),
     // only ** and * are allowed
     IllegalWildcard(usize),
@@ -89,6 +91,7 @@ impl Parser {
                 '*' => self.parse_wildcards()?,
                 '\\' => self.parse_escape()?,
                 '[' => self.parse_range()?,
+                ']'|'(' | ')' | '|' => { return Err(Error::IllegalChar(self.i)); }
                 c => {
                     self.i += 1;
                     Token::Char(c)
@@ -144,7 +147,6 @@ impl Parser {
     fn parse_range(&mut self) -> Result<Token, Error> {
         let start = self.i;
         let mut first_char = self.i + 1;
-        let end;
 
         if first_char >= self.chars.len() {
             return Err(Error::IllegalRange(start));
@@ -159,85 +161,42 @@ impl Parser {
             _ => false,
         };
 
-        let chars = match self.chars[first_char..].iter().position(|x| *x == ']') {
-            Some(j) => {
-                end = first_char + j;
-                parse_char_specifiers(&self.chars[first_char..first_char + j])
+        let mut escaped = false;
+        let mut chars = None;
+        for (i, c) in self.chars[first_char..].iter().enumerate() {
+            match c {
+                _ if escaped => escaped = false,
+                '\\' => escaped = true,
+                ']' => {
+                    chars = Some(&self.chars[first_char..first_char+i]);
+                    break
+                },
+                '['|'(' | ')' | '|' => { return Err(Error::IllegalChar(first_char + i)); }
+                _ => {}
             }
-            None => { return Err(Error::IllegalRange(start)); }
-        };
-
-        if chars.is_empty() {
-            return Err(Error::EmptyRange(start));
         }
 
-        self.i = end + 1;
+        let chars = match chars {
+            Some(c) if c.is_empty() => {return Err(Error::EmptyRange(start))},
+            None => {return Err(Error::UnclosedRange(self.chars.len() - 1))}
+            Some(c) => c,
+        };
+
+        self.i = first_char + chars.len() + 1;
 
         if negated {
-            Ok(Token::NotAnyOf(chars))
+            Ok(Token::NotAnyOf(parse_char_specifiers(chars)))
         } else {
-            Ok(Token::AnyOf(chars))
+            Ok(Token::AnyOf(parse_char_specifiers(chars)))
         }
     }
 
     fn parse_patterns(&mut self) -> Result<Vec<Vec<Token>>, Error> {
-        let first_char = self.i + 2;
-        let mut brace_level = 0;
-        let mut brace_sequence = None;
+        let start = self.i + 2;
+        for (i, c) in self.chars[start..].iter().enumerate() {
 
-        for (i, c) in self.chars[first_char..].iter().enumerate() {
-            match *c {
-                '(' => brace_level += 1,
-                ')' if brace_level == 0 => {
-                    brace_sequence = Some(&self.chars[first_char..first_char + i]);
-                    break;
-                }
-                ')' => brace_level -= 1,
-                _ => {}
-            }
         }
-
-        let brace_sequence = match brace_sequence {
-            Some(s) => s,
-            None => { return Err(Error::IllegalPattern(first_char)); }
-        };
-
-        let mut patterns = Vec::new();
-        let mut brace_level = 0;
-        let mut last_pattern = 0;
-        for (i, c) in brace_sequence.iter().enumerate() {
-            match *c {
-                '(' => brace_level += 1,
-                ')' => brace_level -= 1,
-                '|' if brace_level == 0 => {
-                    let chars = &self.chars[first_char + last_pattern..first_char + i];
-                    if chars.len() == 0 {
-                        return Err(Error::IllegalOr(first_char));
-                    }
-                    last_pattern = i + 1;
-                    patterns.push(chars)
-                }
-                _ => {}
-            }
-        }
-
-        let chars = &self.chars[first_char + last_pattern..first_char + brace_sequence.len()];
-        if chars.len() == 0 {
-            return Err(Error::IllegalOr(first_char));
-        }
-        patterns.push(chars);
-
-        let mut tokens = Vec::new();
-        for p in patterns {
-            let mut pattern = String::new();
-            for c in p {
-                pattern.push(*c);
-            }
-            tokens.push(parse(&pattern)?)
-        }
-
-        self.i = first_char + brace_sequence.len() + 1;
-        Ok(tokens)
+        unimplemented!()
     }
 }
 
