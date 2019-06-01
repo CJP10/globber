@@ -33,26 +33,8 @@ impl FromStr for Pattern {
 
 #[cfg(test)]
 mod tests {
-    use crate::syntax::{CharSpecifier, Error, parse, Token};
-
     use super::Pattern;
-
-    fn chars(input: &str) -> Vec<Token> {
-        input.chars().map(|c| Token::Char(c)).collect()
-    }
-
-    fn specifiers(input: &str) -> Vec<CharSpecifier> {
-        input.chars().map(|c| CharSpecifier::Char(c)).collect()
-    }
-
-    fn range(c1: char, c2: char) -> Vec<CharSpecifier> {
-        vec![CharSpecifier::Range(c1, c2)]
-    }
-
-    #[test]
-    fn lex() {
-        println!("{:#?}", parse("!([)]|test)").unwrap());
-    }
+    use super::syntax::Error;
 
     #[test]
     fn wildcards() {
@@ -133,20 +115,14 @@ mod tests {
 
     #[test]
     fn ranges() {
-        assert_eq!(parse("[a]").unwrap(), vec![Token::AnyOf(specifiers("a"))]);
-        assert_eq!(parse("[!a]").unwrap(), vec![Token::NotAnyOf(specifiers("a"))]);
-        assert_eq!(parse("[abcdef]").unwrap(), vec![Token::AnyOf(specifiers("abcdef"))]);
-        assert_eq!(parse("[!abcdef]").unwrap(), vec![Token::NotAnyOf(specifiers("abcdef"))]);
-        assert_eq!(parse("[a-z]").unwrap(), vec![Token::AnyOf(range('a', 'z'))]);
-        assert_eq!(parse("[!a-z]").unwrap(), vec![Token::NotAnyOf(range('a', 'z'))]);
-
-        let mut tokens = chars("abc");
-        tokens.push(Token::NotAnyOf(range('a', 'z')));
-        assert_eq!(parse("abc[!a-z]").unwrap(), tokens);
-
-        let mut tokens = chars("abc");
-        tokens.push(Token::AnyOf(range('a', 'z')));
-        assert_eq!(parse("abc[a-z]").unwrap(), tokens);
+        let p = Pattern::new("a[a-z]c").unwrap();
+        assert!(p.matches("aac"));
+        assert!(p.matches("aec"));
+        assert!(p.matches("azc"));
+        assert!(!p.matches("a0c"));
+        assert!(!p.matches("aAc"));
+        assert!(!p.matches("aBc"));
+        assert!(!p.matches("aZc"));
     }
 
     #[test]
@@ -230,5 +206,91 @@ mod tests {
 
         assert!(Pattern::new("[-]").unwrap().matches("-"));
         assert!(!Pattern::new("[!-]").unwrap().matches("-"));
+    }
+
+    #[test]
+    fn zero_or_one() {
+        let p = Pattern::new("src/?([a-z]|[a-c]).rs").unwrap();
+        assert!(!p.matches("src/a.rs"));
+        assert!(!p.matches("src/b.rs"));
+        assert!(!p.matches("src/c.rs"));
+        assert!(p.matches("src/d.rs"));
+        assert!(p.matches("src/e.rs"));
+        assert!(p.matches("src/f.rs"));
+        assert!(!p.matches("src/ggggggggg.rs"));
+        assert!(!p.matches("src/0.rs"));
+        assert!(!p.matches("src/123456789.rs"));
+        assert!(p.matches("src/.rs"));
+    }
+
+    #[test]
+    fn zero_or_more() {
+        let p = Pattern::new("src/*([a-z]|[a-c]).rs").unwrap();
+        assert!(p.matches("src/a.rs"));
+        assert!(p.matches("src/b.rs"));
+        assert!(p.matches("src/c.rs"));
+        assert!(p.matches("src/d.rs"));
+        assert!(p.matches("src/e.rs"));
+        assert!(p.matches("src/f.rs"));
+        assert!(!p.matches("src/ggggggggg.rs"));
+        assert!(!p.matches("src/0.rs"));
+        assert!(!p.matches("src/123456789.rs"));
+        assert!(p.matches("src/.rs"));
+    }
+
+    #[test]
+    fn one_or_more() {
+        let p = Pattern::new("src/+([a-z]|[a-c]).rs").unwrap();
+        assert!(p.matches("src/a.rs"));
+        assert!(p.matches("src/b.rs"));
+        assert!(p.matches("src/c.rs"));
+        assert!(p.matches("src/d.rs"));
+        assert!(p.matches("src/e.rs"));
+        assert!(p.matches("src/f.rs"));
+        assert!(!p.matches("src/ggggggggg.rs"));
+        assert!(!p.matches("src/0.rs"));
+        assert!(!p.matches("src/123456789.rs"));
+        assert!(!p.matches("src/.rs"));
+    }
+
+    #[test]
+    fn exactly_one() {
+        let p = Pattern::new("src/@([a-z]|[a-c]).rs").unwrap();
+        assert!(!p.matches("src/a.rs"));
+        assert!(!p.matches("src/b.rs"));
+        assert!(!p.matches("src/c.rs"));
+        assert!(p.matches("src/d.rs"));
+        assert!(p.matches("src/e.rs"));
+        assert!(p.matches("src/f.rs"));
+        assert!(!p.matches("src/ggggggggg.rs"));
+        assert!(!p.matches("src/0.rs"));
+        assert!(!p.matches("src/123456789.rs"));
+        assert!(!p.matches("src/.rs"));
+    }
+
+    #[test]
+    fn none_of() {
+        let p = Pattern::new("src/!([a-z]|[a-c]).rs").unwrap();
+        assert!(!p.matches("src/a.rs"));
+        assert!(!p.matches("src/b.rs"));
+        assert!(!p.matches("src/c.rs"));
+        assert!(!p.matches("src/d.rs"));
+        assert!(!p.matches("src/e.rs"));
+        assert!(!p.matches("src/f.rs"));
+        assert!(p.matches("src/ggggggggg.rs"));
+        assert!(!p.matches("src/ggggggggg"));
+        assert!(p.matches("src/0.rs"));
+        assert!(p.matches("src/123456789.rs"));
+        assert!(!p.matches("src/.rs"));
+    }
+
+    #[test]
+    fn extra() {
+        let p = Pattern::new("/var/log/!(containers)*/**").unwrap();
+        assert!(p.matches("/var/log/cpus/"));
+        assert!(p.matches("/var/log/cpus/core_0.log"));
+        assert!(!p.matches("/var/log/containers/"));
+        assert!(!p.matches("/var/log/containers/0.log"));
+        assert!(p.matches("/var/log/syslog"));
     }
 }

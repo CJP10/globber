@@ -33,6 +33,8 @@ pub(crate) enum CharSpecifier {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Error {
     IllegalPattern(usize),
+    EmptyPattern(usize),
+    UnclosedPattern(usize),
     IllegalChar(usize),
     IllegalOr(usize),
     IllegalRange(usize),
@@ -91,7 +93,7 @@ impl Parser {
                 '*' => self.parse_wildcards()?,
                 '\\' => self.parse_escape()?,
                 '[' => self.parse_range()?,
-                ']'|'(' | ')' | '|' => { return Err(Error::IllegalChar(self.i)); }
+                ']' | '(' | ')' | '|' => { return Err(Error::IllegalChar(self.i)); }
                 c => {
                     self.i += 1;
                     Token::Char(c)
@@ -168,17 +170,17 @@ impl Parser {
                 _ if escaped => escaped = false,
                 '\\' => escaped = true,
                 ']' => {
-                    chars = Some(&self.chars[first_char..first_char+i]);
-                    break
-                },
-                '['|'(' | ')' | '|' => { return Err(Error::IllegalChar(first_char + i)); }
+                    chars = Some(&self.chars[first_char..first_char + i]);
+                    break;
+                }
+                '[' | '(' | ')' | '|' => { return Err(Error::IllegalChar(first_char + i)); }
                 _ => {}
             }
         }
 
         let chars = match chars {
-            Some(c) if c.is_empty() => {return Err(Error::EmptyRange(start))},
-            None => {return Err(Error::UnclosedRange(self.chars.len() - 1))}
+            Some(c) if c.is_empty() => { return Err(Error::EmptyRange(start)); }
+            None => { return Err(Error::UnclosedRange(self.chars.len() - 1)); }
             Some(c) => c,
         };
 
@@ -193,10 +195,94 @@ impl Parser {
 
     fn parse_patterns(&mut self) -> Result<Vec<Vec<Token>>, Error> {
         let start = self.i + 2;
-        for (i, c) in self.chars[start..].iter().enumerate() {
+        let mut paren_stack = Vec::new();
 
+        let mut escaped = false;
+        let mut chars = None;
+        for (i, c) in self.chars[start..].iter().enumerate() {
+            match c {
+                _ if escaped => escaped = false,
+                '\\' => escaped = true,
+                ']' => {
+                    match paren_stack.last() {
+                        Some(c) if *c != '[' => return Err(Error::IllegalChar(start + i)),
+                        None => return Err(Error::IllegalChar(start + i)),
+                        _ => paren_stack.pop(),
+                    };
+                }
+                ')' if paren_stack.is_empty() => {
+                    chars = Some(&self.chars[start..start + i]);
+                    break;
+                }
+                ')' => {
+                    match paren_stack.last() {
+                        Some(c) if *c != '(' => return Err(Error::IllegalChar(start + i)),
+                        None => return Err(Error::IllegalChar(start + i)),
+                        _ => paren_stack.pop(),
+                    };
+                }
+                '(' | '[' => paren_stack.push(*c),
+                _ => {}
+            }
         }
-        unimplemented!()
+
+        let chars = match chars {
+            Some(c) if c.is_empty() => { return Err(Error::EmptyPattern(start)); }
+            None => { return Err(Error::UnclosedPattern(self.chars.len() - 1)); }
+            Some(c) => c,
+        };
+
+        let mut pattern_parts = Vec::new();
+        let mut last_pattern = 0;
+        for (i, c) in chars.iter().enumerate() {
+            match c {
+                _ if escaped => escaped = false,
+                '\\' => escaped = true,
+                ']' => {
+                    match paren_stack.last() {
+                        Some(c) if *c != '[' => return Err(Error::IllegalChar(start + i)),
+                        None => return Err(Error::IllegalChar(start + i)),
+                        _ => paren_stack.pop(),
+                    };
+                }
+                ')' => {
+                    match paren_stack.last() {
+                        Some(c) if *c != '(' => return Err(Error::IllegalChar(start + i)),
+                        None => return Err(Error::IllegalChar(start + i)),
+                        _ => paren_stack.pop(),
+                    };
+                }
+                '(' | '[' => paren_stack.push(*c),
+                '|' => if paren_stack.len() == 0 {
+                    let part = &self.chars[start + last_pattern..start + i];
+                    if part.is_empty() {
+                        return Err(Error::IllegalOr(start + last_pattern));
+                    }
+                    last_pattern = i+1;
+                    pattern_parts.push(part);
+                }
+                _ => {}
+            }
+        }
+
+        let part = &self.chars[start + last_pattern..start + chars.len()];
+        if part.is_empty() {
+            return Err(Error::IllegalOr(start + last_pattern));
+        }
+        pattern_parts.push(part);
+
+        let mut tokens = Vec::new();
+        for part in pattern_parts.into_iter()   {
+            let mut pattern = String::new();
+            for c in part {
+                pattern.push(*c)
+            }
+            tokens.push(parse(&pattern)?)
+        }
+
+        self.i = start + chars.len()+1;
+
+        Ok(tokens)
     }
 }
 
