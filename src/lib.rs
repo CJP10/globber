@@ -291,6 +291,19 @@ mod tests {
         assert!(p.matches("/var/log/cpus/core_0.log"));
         assert!(!p.matches("/var/log/containers/"));
         assert!(!p.matches("/var/log/containers/0.log"));
-        assert!(p.matches("/var/log/syslog"));
+
+        let p = Pattern::new("!(+(ab|def)*+(.jpg|.gif))").unwrap();
+        assert!(!p.matches("ab.jpg"));
+        assert!(!p.matches("abc.jpg"));
+        assert!(!p.matches("def.jpg"));
+        assert!(!p.matches("defgh.jpg"));
+        assert!(!p.matches("ab.gif"));
+        assert!(!p.matches("abc.gif"));
+        assert!(!p.matches("def.gif"));
+        assert!(!p.matches("defgh.gif"));
+        assert!(p.matches("ced.gif"));
+        assert!(p.matches("ced.jpg"));
+        assert!(p.matches("test.rs"));
+        assert!(p.matches("ab.rs"));
     }
 }
