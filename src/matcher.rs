@@ -1,6 +1,8 @@
 use std::path::is_separator;
 use std::str::Chars;
 
+use rayon::prelude::*;
+
 use crate::matcher::Status::*;
 use crate::syntax::{CharSpecifier, Token};
 
@@ -23,17 +25,16 @@ impl Matcher {
         }
     }
 
-    pub(crate) fn matches(&self, mut input: Chars) -> bool {
-        match_index(&self.tokens, 0, &mut input) == Status::Match
+    pub(crate) fn matches(&self, input: Chars) -> bool {
+        match_index(&self.tokens, 0, input) == Status::Match
     }
 }
 
-fn match_index(tokens: &Vec<Token>, i: usize, input: &mut Chars) -> Status {
+fn match_index(tokens: &Vec<Token>, i: usize, mut input: Chars) -> Status {
     for (ti, token) in tokens[i..].iter().enumerate() {
-        println!("{:?} => {:?}",token, input.clone().next());
         match token {
             Token::AnyRecursive | Token::AnySequence => {
-                let result = match_index(tokens, i + ti + 1, &mut input.clone());
+                let result = match_index(tokens, i + ti + 1, input.clone());
                 match result {
                     Status::Retryable => {}
                     _ => return result,
@@ -43,7 +44,7 @@ fn match_index(tokens: &Vec<Token>, i: usize, input: &mut Chars) -> Status {
                     if let Some(t) = tokens.get(i + ti + 1) {
                         match t {
                             Token::Char(c) if is_separator(*c) => {
-                                match match_index(tokens, i + ti + 2, &mut input.clone()) {
+                                match match_index(tokens, i + ti + 2, input.clone()) {
                                     Status::Retryable => {}
                                     m => return m,
                                 }
@@ -54,7 +55,7 @@ fn match_index(tokens: &Vec<Token>, i: usize, input: &mut Chars) -> Status {
                 }
 
                 while let Some(_) = input.next() {
-                    match match_index(tokens, i + ti + 1, &mut input.clone()) {
+                    match match_index(tokens, i + ti + 1, input.clone()) {
                         Status::Retryable => {}
                         m => return m,
                     }
@@ -102,7 +103,7 @@ fn match_index(tokens: &Vec<Token>, i: usize, input: &mut Chars) -> Status {
                     let mut t = t.clone();
                     t.extend_from_slice(&tokens[i + ti + 1..]);
 
-                    match match_index(&mut t, 0, &mut input.clone()) {
+                    match match_index(&mut t, 0, input.clone()) {
                         Match => matches += 1,
                         _ => {}
                     }
@@ -123,7 +124,7 @@ fn match_index(tokens: &Vec<Token>, i: usize, input: &mut Chars) -> Status {
                     let mut t = t.clone();
                     t.extend_from_slice(&tokens[i + ti + 1..]);
 
-                    match match_index(&mut t, 0, &mut input.clone()) {
+                    match match_index(&mut t, 0, input.clone()) {
                         Match => return Match,
                         _ => {}
                     }
@@ -136,7 +137,7 @@ fn match_index(tokens: &Vec<Token>, i: usize, input: &mut Chars) -> Status {
                     let mut t = t.clone();
                     t.extend_from_slice(&tokens[i + ti + 1..]);
 
-                    match match_index(&mut t, 0, &mut input.clone()) {
+                    match match_index(&mut t, 0, input.clone()) {
                         Match => return Match,
                         _ => {}
                     }
@@ -151,7 +152,7 @@ fn match_index(tokens: &Vec<Token>, i: usize, input: &mut Chars) -> Status {
                     let mut t = t.clone();
                     t.extend_from_slice(&tokens[i + ti + 1..]);
 
-                    match match_index(&mut t, 0, &mut input.clone()) {
+                    match match_index(&mut t, 0, input.clone()) {
                         Match => matches += 1,
                         _ => {}
                     }
@@ -172,14 +173,14 @@ fn match_index(tokens: &Vec<Token>, i: usize, input: &mut Chars) -> Status {
                     let mut t = t.clone();
                     t.extend_from_slice(&tokens[i + ti + 1..]);
 
-                    match match_index(&mut t, 0, &mut input.clone()) {
+                    match match_index(&mut t, 0, input.clone()) {
                         Match => return Retryable,
                         _ => {}
                     }
                 }
 
                 while let Some(_) = input.next() {
-                    match match_index(tokens, i + ti + 1, &mut input.clone()) {
+                    match match_index(tokens, i + ti + 1, input.clone()) {
                         Status::Retryable => {}
                         m => return m,
                     }
