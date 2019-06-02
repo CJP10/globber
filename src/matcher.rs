@@ -1,8 +1,6 @@
 use std::path::is_separator;
 use std::str::Chars;
 
-use rayon::prelude::*;
-
 use crate::matcher::Status::*;
 use crate::syntax::{CharSpecifier, Token};
 
@@ -186,7 +184,6 @@ fn match_index(tokens: &Vec<Token>, i: usize, mut input: Chars) -> Status {
                     }
                 }
             }
-            _ => { unreachable!() }
         }
     }
 
