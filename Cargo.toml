@@ -4,12 +4,8 @@ version = "0.0.1"
 authors = ["Connor Peticca <cjpet10@gmail.com>"]
 edition = "2018"
 
-[dependencies]
-
 [dev-dependencies]
 criterion = "0.2"
-jemallocator = "0.3.0"
-glob = "0.3.0"
 
 [[bench]]
 name = "bench"
