@@ -31,21 +31,32 @@ pub(crate) enum CharSpecifier {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub enum Error {
-    IllegalPattern(usize),
+pub(crate) enum Error {
     EmptyPattern(usize),
     UnclosedPattern(usize),
     IllegalChar(usize),
     IllegalOr(usize),
-    IllegalRange(usize),
     UnclosedRange(usize),
     EmptyRange(usize),
-    // only ** and * are allowed
     IllegalWildcard(usize),
-    // only ** and * are allowed
     IllegalRecursion(usize),
-    // when a \ is not followed by a char
     IllegalEscape(usize),
+}
+
+impl Error {
+    pub(crate) fn desc(&self) -> &str {
+        match self {
+            Error::EmptyPattern(_) => "patterns must not be empty! e.g !(), *(), @(), etc",
+            Error::UnclosedPattern(_) => "patterns must be ended with a ), consider adding one!",
+            Error::IllegalChar(_) => "illegal character found! consider escaping with \\",
+            Error::IllegalOr(_) => "| must have a pattern on the left and right! e.g (|), (a|), (|a), (a||b)",
+            Error::UnclosedRange(_) => "ranges must be ended with a ], consider adding one!",
+            Error::EmptyRange(_) => "ranges must not be empty! e.g [], [!], etc",
+            Error::IllegalWildcard(_) => "only * and ** are allowed, eg ***, ****, etc",
+            Error::IllegalRecursion(_) => "** must be a single path component, e.g a/**b, a/bc**, a/b**c**d, a**/b, etc",
+            Error::IllegalEscape(_) => "\\ must be followed be a character, for windows separators use \\\\"
+        }
+    }
 }
 
 pub(crate) fn parse(input: &str) -> Result<Vec<Token>, Error> {
@@ -151,7 +162,7 @@ impl Parser {
         let mut first_char = self.i + 1;
 
         if first_char >= self.chars.len() {
-            return Err(Error::IllegalRange(start));
+            return Err(Error::UnclosedRange(start));
         }
 
         let negated = match self.chars[first_char] {
@@ -258,7 +269,7 @@ impl Parser {
                     if part.is_empty() {
                         return Err(Error::IllegalOr(start + last_pattern));
                     }
-                    last_pattern = i+1;
+                    last_pattern = i + 1;
                     pattern_parts.push(part);
                 }
                 _ => {}
@@ -272,7 +283,7 @@ impl Parser {
         pattern_parts.push(part);
 
         let mut tokens = Vec::new();
-        for part in pattern_parts.into_iter()   {
+        for part in pattern_parts.into_iter() {
             let mut pattern = String::new();
             for c in part {
                 pattern.push(*c)
@@ -280,7 +291,7 @@ impl Parser {
             tokens.push(parse(&pattern)?)
         }
 
-        self.i = start + chars.len()+1;
+        self.i = start + chars.len() + 1;
 
         Ok(tokens)
     }

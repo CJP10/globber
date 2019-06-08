@@ -1,9 +1,12 @@
+//#![deny(missing_docs)]
+
+use std::fmt::{Display, Error as FmtError, Formatter};
 use std::str::FromStr;
 
 use crate::matcher::Matcher;
-use crate::syntax::{Error, parse};
+use crate::syntax::{Error as SyntaxError, parse};
 
-pub mod syntax;
+pub(crate) mod syntax;
 pub(crate) mod matcher;
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
@@ -26,8 +29,40 @@ impl FromStr for Pattern {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self {
-            matcher: Matcher::new(parse(s)?),
+            matcher: Matcher::new(
+                parse(s)
+                    .map_err(|e| Error {
+                        inner: e,
+                        input: s.to_owned(),
+                    })?
+            ),
         })
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Debug, Hash)]
+pub struct Error {
+    pub(crate) inner: SyntaxError,
+    pub(crate) input: String,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        let mut pos = String::new();
+        match self.inner {
+            SyntaxError::EmptyPattern(i) | SyntaxError::UnclosedPattern(i)
+            | SyntaxError::IllegalChar(i) | SyntaxError::IllegalOr(i)
+            | SyntaxError::UnclosedRange(i) | SyntaxError::EmptyRange(i)
+            | SyntaxError::IllegalWildcard(i) | SyntaxError::IllegalRecursion(i)
+            | SyntaxError::IllegalEscape(i) => {
+                for _ in 0..i { pos.push('-') }
+                pos.push('^');
+            }
+        }
+        write!(f,
+               "Glob syntax error\n-------------------------------------\n{}\n{}\n{}\n-------------------------------------",
+               self.inner.desc(), self.input, pos
+        )
     }
 }
 
@@ -102,15 +137,15 @@ mod tests {
 
     #[test]
     fn wildcard_errors() {
-        assert_eq!(Pattern::new("a/**b").unwrap_err(), Error::IllegalRecursion(4));
-        assert_eq!(Pattern::new("a/bc**").unwrap_err(), Error::IllegalRecursion(3));
-        assert_eq!(Pattern::new("a/*****").unwrap_err(), Error::IllegalWildcard(4));
-        assert_eq!(Pattern::new("a/b**c**d").unwrap_err(), Error::IllegalRecursion(2));
-        assert_eq!(Pattern::new("a**b").unwrap_err(), Error::IllegalRecursion(0));
-        assert_eq!(Pattern::new("***").unwrap_err(), Error::IllegalWildcard(2));
-        assert_eq!(Pattern::new("****").unwrap_err(), Error::IllegalWildcard(2));
-        assert_eq!(Pattern::new("a**/b").unwrap_err(), Error::IllegalRecursion(0));
-        assert_eq!(Pattern::new("a/\\***").unwrap_err(), Error::IllegalRecursion(3));
+        assert_eq!(Pattern::new("a/**b").unwrap_err().inner, Error::IllegalRecursion(4));
+        assert_eq!(Pattern::new("a/bc**").unwrap_err().inner, Error::IllegalRecursion(3));
+        assert_eq!(Pattern::new("a/*****").unwrap_err().inner, Error::IllegalWildcard(4));
+        assert_eq!(Pattern::new("a/b**c**d").unwrap_err().inner, Error::IllegalRecursion(2));
+        assert_eq!(Pattern::new("a**b").unwrap_err().inner, Error::IllegalRecursion(0));
+        assert_eq!(Pattern::new("***").unwrap_err().inner, Error::IllegalWildcard(2));
+        assert_eq!(Pattern::new("****").unwrap_err().inner, Error::IllegalWildcard(2));
+        assert_eq!(Pattern::new("a**/b").unwrap_err().inner, Error::IllegalRecursion(0));
+        assert_eq!(Pattern::new("a/\\***").unwrap_err().inner, Error::IllegalRecursion(3));
     }
 
     #[test]
@@ -127,24 +162,24 @@ mod tests {
 
     #[test]
     fn range_errors() {
-        assert_eq!(Pattern::new("[!]").unwrap_err(), Error::EmptyRange(0));
-        assert_eq!(Pattern::new("[]").unwrap_err(), Error::EmptyRange(0));
-        assert_eq!(Pattern::new("[]]]]]").unwrap_err(), Error::EmptyRange(0));
-        assert_eq!(Pattern::new("[dfsfsdfsdf").unwrap_err(), Error::UnclosedRange(10));
-        assert_eq!(Pattern::new("[!sdfdsfdf").unwrap_err(), Error::UnclosedRange(9));
-        assert_eq!(Pattern::new("abc[def").unwrap_err(), Error::UnclosedRange(6));
-        assert_eq!(Pattern::new("abc[!def").unwrap_err(), Error::UnclosedRange(7));
-        assert_eq!(Pattern::new("abc[").unwrap_err(), Error::IllegalRange(3));
-        assert_eq!(Pattern::new("abc[!").unwrap_err(), Error::UnclosedRange(4));
-        assert_eq!(Pattern::new("abc[d").unwrap_err(), Error::UnclosedRange(4));
-        assert_eq!(Pattern::new("abc[!d").unwrap_err(), Error::UnclosedRange(5));
-        assert_eq!(Pattern::new("abc[]").unwrap_err(), Error::EmptyRange(3));
-        assert_eq!(Pattern::new("abc[!]").unwrap_err(), Error::EmptyRange(3));
-        assert_eq!(Pattern::new("abc[!]").unwrap_err(), Error::EmptyRange(3));
-        assert_eq!(Pattern::new("[adc(]").unwrap_err(), Error::IllegalChar(4));
-        assert_eq!(Pattern::new("[adc[]").unwrap_err(), Error::IllegalChar(4));
-        assert_eq!(Pattern::new("[adc]]").unwrap_err(), Error::IllegalChar(5));
-        assert_eq!(Pattern::new("[adc)]").unwrap_err(), Error::IllegalChar(4));
+        assert_eq!(Pattern::new("[!]").unwrap_err().inner, Error::EmptyRange(0));
+        assert_eq!(Pattern::new("[]").unwrap_err().inner, Error::EmptyRange(0));
+        assert_eq!(Pattern::new("[]]]]]").unwrap_err().inner, Error::EmptyRange(0));
+        assert_eq!(Pattern::new("[dfsfsdfsdf").unwrap_err().inner, Error::UnclosedRange(10));
+        assert_eq!(Pattern::new("[!sdfdsfdf").unwrap_err().inner, Error::UnclosedRange(9));
+        assert_eq!(Pattern::new("abc[def").unwrap_err().inner, Error::UnclosedRange(6));
+        assert_eq!(Pattern::new("abc[!def").unwrap_err().inner, Error::UnclosedRange(7));
+        assert_eq!(Pattern::new("abc[").unwrap_err().inner, Error::EmptyRange(3));
+        assert_eq!(Pattern::new("abc[!").unwrap_err().inner, Error::UnclosedRange(4));
+        assert_eq!(Pattern::new("abc[d").unwrap_err().inner, Error::UnclosedRange(4));
+        assert_eq!(Pattern::new("abc[!d").unwrap_err().inner, Error::UnclosedRange(5));
+        assert_eq!(Pattern::new("abc[]").unwrap_err().inner, Error::EmptyRange(3));
+        assert_eq!(Pattern::new("abc[!]").unwrap_err().inner, Error::EmptyRange(3));
+        assert_eq!(Pattern::new("abc[!]").unwrap_err().inner, Error::EmptyRange(3));
+        assert_eq!(Pattern::new("[adc(]").unwrap_err().inner, Error::IllegalChar(4));
+        assert_eq!(Pattern::new("[adc[]").unwrap_err().inner, Error::IllegalChar(4));
+        assert_eq!(Pattern::new("[adc]]").unwrap_err().inner, Error::IllegalChar(5));
+        assert_eq!(Pattern::new("[adc)]").unwrap_err().inner, Error::IllegalChar(4));
     }
 
     #[test]
@@ -305,5 +340,19 @@ mod tests {
         assert!(p.matches("ced.jpg"));
         assert!(p.matches("test.rs"));
         assert!(p.matches("ab.rs"));
+
+        let p = Pattern::new("!(!(!(!(vec|test)))).rs").unwrap();
+        assert!(p.matches("vec.rs"));
+        assert!(p.matches("test.rs"));
+        assert!(!p.matches("dot.rs"));
+        assert!(!p.matches(".rs"));
+        assert!(!p.matches("asfsdf.rs"));
+
+        let p = Pattern::new("!(!(!(vec|test))).rs").unwrap();
+        assert!(!p.matches("vec.rs"));
+        assert!(!p.matches("test.rs"));
+        assert!(p.matches("dot.rs"));
+        assert!(!p.matches(".rs"));
+        assert!(p.matches("asfsdf.rs"));
     }
 }
