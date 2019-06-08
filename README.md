@@ -1,5 +1,9 @@
 # globber
 
+[![Build Status](https://travis-ci.com/CJP10/globber.svg?branch=master)](https://travis-ci.com/CJP10/globber)
+[![Docs](https://docs.rs/globber/badge.svg)](https://docs.rs/globber)
+[![Crate](https://meritbadge.herokuapp.com/globber)](https://crates.io/crates/globber)
+
 This crate provides matching of strings to extended glob patterns.
 Only matching is supported currently and actual filesystem look up is on the road map.
 
