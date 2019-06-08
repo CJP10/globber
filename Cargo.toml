@@ -1,8 +1,14 @@
 [package]
 name = "globber"
-version = "0.0.1"
-authors = ["Connor Peticca <cjpet10@gmail.com>"]
+version = "0.1.0"
+authors = ["Connor Peticca"]
 edition = "2018"
+
+description = "Extended glob matching library"
+license = "MIT"
+repository = "https://github.com/CJP10/globber"
+readme = "README.md"
+keywords = ["glob","extended","matching"]
 
 [dev-dependencies]
 criterion = "0.2"
