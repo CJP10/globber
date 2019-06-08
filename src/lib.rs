@@ -238,7 +238,7 @@ mod tests {
         assert_eq!(Pattern::new("[!sdfdsfdf").unwrap_err().inner, Error::UnclosedRange(9));
         assert_eq!(Pattern::new("abc[def").unwrap_err().inner, Error::UnclosedRange(6));
         assert_eq!(Pattern::new("abc[!def").unwrap_err().inner, Error::UnclosedRange(7));
-        assert_eq!(Pattern::new("abc[").unwrap_err().inner, Error::EmptyRange(3));
+        assert_eq!(Pattern::new("abc[").unwrap_err().inner, Error::UnclosedRange(3));
         assert_eq!(Pattern::new("abc[!").unwrap_err().inner, Error::UnclosedRange(4));
         assert_eq!(Pattern::new("abc[d").unwrap_err().inner, Error::UnclosedRange(4));
         assert_eq!(Pattern::new("abc[!d").unwrap_err().inner, Error::UnclosedRange(5));
