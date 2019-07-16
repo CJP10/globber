@@ -69,6 +69,7 @@
 //!
 //! [glob]: https://github.com/rust-lang-nursery/glob
 
+use std::error::Error as StdError;
 use std::fmt::{Display, Error as FmtError, Formatter};
 use std::str::FromStr;
 
@@ -134,6 +135,8 @@ impl Display for Error {
         )
     }
 }
+
+impl StdError for Error {}
 
 #[cfg(test)]
 mod tests {
